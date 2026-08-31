@@ -1,1 +1,18 @@
+package {
+  name        = "carbon-lang"
+  version     = "0.0.0-trunk"
+  arch        = ["x86_64"]
+  description = "Carbon -- eksperymentalny następca C++ (Google); ten pakiet buduje driver toolchaina (`carbon`) i `explorer` wprost z gałęzi trunk za pomocą Bazela"
+  depends_on  = ["libc++", "libc++abi", "libunwind"]
+}
 
+recipe {
+  file = "recipe.janet"
+  lang = "janet"
+}
+
+release {
+  repo       = "https://github.com/Zenit-Linux/own-repository"
+  repo_file  = "repo/own-repository.json"
+  asset_name = "carbon-lang"
+}
