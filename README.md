@@ -1,4 +1,4 @@
-Carbon Lang packaging for Zenit Linux.
+# Carbon Lang packaging for Zenit Linux.
 
 Buduje [Carbon](https://github.com/carbon-language/carbon-lang) (`carbon` --
 driver toolchaina, oraz `carbon-explorer` -- interpreter demo) wprost ze
