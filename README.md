@@ -4,14 +4,6 @@ Buduje [Carbon](https://github.com/carbon-language/carbon-lang) (`carbon` --
 driver toolchaina, oraz `carbon-explorer` -- interpreter demo) wprost ze
 źródeł i pakuje jako `.zpk` dla Zenit Linux.
 
-## Dlaczego to inne niż `zde`/`hsharp`/`blue-environment`
-
-Carbon jest projektem eksperymentalnym bez tagowanych wydań -- nie ma
-tarballa źródłowego do pobrania, więc `recipe.janet` samo klonuje repo
-(domyślnie gałąź `trunk`) zamiast operować na już wypakowanym drzewie
-źródłowym obok `zpk.build`. Z tego samego powodu wersja pakietu to
-`0.0.0-trunk`, a nie realny numer wersji projektu.
-
 ## Wymagania budowania
 
 * [Bazelisk](https://github.com/bazelbuild/bazelisk) (albo zwykły
