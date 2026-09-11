@@ -1,0 +1,3 @@
+*.build linguist-detectable=true
+*.build linguist-documentation=false
+*.build linguist-language=HCL
