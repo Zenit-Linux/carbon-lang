@@ -34,23 +34,33 @@ zależność) i potrafi trwać długo przy pierwszym uruchomieniu.
   checkoutu carbon-lang -- pomija klonowanie.
 * `ZPK_PACKAGING_PREBUILT_BAZEL_BIN` -- ścieżka do katalogu
   `bazel-bin` z wynikiem wcześniejszego `bazel build //toolchain
-  //explorer` (np. osobny krok w CI) -- pomija budowanie.
+  //explorer //toolchain/install:carbon_toolchain_tar` (np. osobny
+  krok w CI) -- pomija budowanie. Uwaga: sam `//toolchain` nie
+  wystarczy, patrz sekcja niżej.
 
 ## Co trafia do pakietu
 
-Cała zawartość `bazel-bin/toolchain/install/prefix_root/` (drzewo
-`bin/` + `lib/carbon/core/...` -- Carbon szuka preludium standardowej
-biblioteki po ścieżce względnej wobec binarki, więc ten układ musi
-zostać zachowany) trafia jako `usr/` w pakiecie, plus osobno
-`carbon-explorer` (interpreter demo, `//explorer`, nie wchodzi w skład
-`prefix_root`).
+`//toolchain` sam w sobie to dziś tylko alias na driver `carbon`
+(`bazel run //toolchain`) -- nie materializuje żadnego gotowego
+drzewa instalacyjnego. Zamiast tego budujemy
+`//toolchain/install:carbon_toolchain_tar`, archiwum `pkg_tar` z
+układem `bin/` + `lib/carbon/core/...` (Carbon szuka preludium
+standardowej biblioteki po ścieżce względnej wobec binarki, więc ten
+układ musi zostać zachowany). Rozpakowujemy je (z pominięciem
+katalogu wersji na szczycie archiwum) jako `usr/` w pakiecie, plus
+osobno `carbon-explorer` (interpreter demo, `//explorer`, nie wchodzi
+w skład archiwum instalki).
 
 ## Znane ograniczenia
 
 Carbon nie publikuje jeszcze stabilnego ABI ani wydań -- ta recipe
-odzwierciedla stan projektu z chwili napisania (dokumentacja
-kontrybucyjna, struktura `bazel-bin/toolchain/install/prefix_root`
-opisana w carbon-lang#4208 i #4288). Nazwy targetów Bazela mogą się
-zmienić wraz z rozwojem projektu -- jeśli `bazel build //toolchain
-//explorer` przestanie działać, sprawdź aktualne instrukcje w
+odzwierciedla stan projektu z chwili napisania (układ archiwum
+instalki opisany w `toolchain/install/BUILD` i
+`install_filegroups.bzl`; poprzedni układ oparty o katalog
+`bazel-bin/toolchain/install/prefix_root`, opisany w carbon-lang#4208
+i #4288, został przez projekt zastąpiony tym archiwum). Nazwy
+targetów Bazela mogą się zmienić wraz z rozwojem projektu -- jeśli
+`bazel build //toolchain //explorer
+//toolchain/install:carbon_toolchain_tar` przestanie działać,
+sprawdź aktualne instrukcje w
 [README carbon-lang](https://github.com/carbon-language/carbon-lang#readme).
