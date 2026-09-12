@@ -136,9 +136,14 @@
 (def bazel-bin-dir
   (if (and prebuilt (> (length prebuilt) 0))
     # CI/operator już zbudowało toolchain wcześniej w tym samym biegu
-    # (np. osobny krok `bazel build //toolchain //explorer`) -- nie
-    # buduj drugi raz, użyj gotowego katalogu bazel-bin. Pomijamy też
-    # całą poniższą logikę instalowania Clang/LLD/uv/bazel.
+    # (np. osobny krok `bazel build //toolchain //explorer
+    # //toolchain/install:carbon_toolchain_tar`) -- nie buduj drugi
+    # raz, użyj gotowego katalogu bazel-bin. Pomijamy też całą
+    # poniższą logikę instalowania Clang/LLD/uv/bazel. Uwaga: samo
+    # `//toolchain` NIE zbuduje archiwum instalki -- operator musi
+    # jawnie dorzucić `//toolchain/install:carbon_toolchain_tar`,
+    # inaczej dalsza część recipe nie znajdzie
+    # `carbon_toolchain-*.tar`.
     prebuilt
     (do
       # -----------------------------------------------------------
@@ -256,17 +261,22 @@
                          " && chmod +x " dest))
             "bazel")))
 
-      # Budujemy driver toolchaina ("carbon") -- wymagany. Zbudowanie
-      # //toolchain jako efekt uboczny materializuje
-      # bazel-bin/toolchain/install/prefix_root -- gotowe drzewo
-      # instalacyjne z układem bin/ + lib/carbon/core (tak samo jak
-      # zwykły prefiks /usr), którego binarka `carbon` używa do
-      # znalezienia preludium standardowej biblioteki po ścieżce
-      # względnej "../../lib/carbon" -- patrz carbon-lang#4208,
-      # carbon-lang#4288. Ten pierwszy fetch/build też pobiera
-      # LLVM ze źródeł jako zależność Bazela -- bywa długi, to
-      # normalne, nie tylko dla tego builda.
-      (run (string "cd " src-dir " && " bazel-cmd " build //toolchain"))
+      # Budujemy driver toolchaina ("carbon") -- wymagany. UWAGA: samo
+      # `bazel build //toolchain` NIE wystarcza -- `//toolchain:toolchain`
+      # to dziś tylko alias na `//toolchain:carbon` (wygodny `bazel run`),
+      # a katalog `bazel-bin/toolchain/install/prefix_root` z
+      # carbon-lang#4208/#4288, na którym opierała się starsza wersja tej
+      # recipe, już nie istnieje -- projekt przeszedł na budowanie
+      # instalki jako archiwum `pkg_tar`
+      # (`//toolchain/install:carbon_toolchain_tar`), patrz
+      # `toolchain/install/BUILD` i `pkg_helpers.bzl` w carbon-lang. To
+      # archiwum ma ten sam układ bin/ + lib/carbon/core co dawny
+      # prefix_root, więc rozpakowujemy je zamiast kopiować katalog.
+      # Ten pierwszy fetch/build też pobiera LLVM ze źródeł jako
+      # zależność Bazela -- bywa długi, to normalne, nie tylko dla tego
+      # builda.
+      (run (string "cd " src-dir " && " bazel-cmd
+                   " build //toolchain //toolchain/install:carbon_toolchain_tar"))
 
       # `//explorer` bywał obecny/nieobecny w zależności od stanu
       # trunku (starszy interpreter demo, stopniowo wypierany przez
@@ -281,23 +291,36 @@
         (fail "'bazel info bazel-bin' nie powiodło się"))
       (bazel-bin-result 1))))
 
-(def prefix-root (string bazel-bin-dir "/toolchain/install/prefix_root"))
-(unless (os/stat prefix-root :mode)
-  (fail (string "nie znaleziono zbudowanego drzewa instalacyjnego: " prefix-root
-                " -- upewnij się, że `bazel build //toolchain` zakończyło się sukcesem")))
+# Instalka trafia dziś do bazel-bin jako archiwum `pkg_tar`
+# (`toolchain/install:carbon_toolchain_tar`), nie jako gotowy katalog
+# `prefix_root` -- nazwa pliku zawiera numer wersji obliczony przez
+# Bazela (`compute_version`), więc szukamy go po wzorcu zamiast po
+# stałej ścieżce.
+(def install-dir (string bazel-bin-dir "/toolchain/install"))
+(def tar-glob (shell-out (string "ls " install-dir "/carbon_toolchain-*.tar 2>/dev/null | head -n1")))
+(def tar-path (if (and (tar-glob 0) (> (length (tar-glob 1)) 0)) (tar-glob 1) nil))
+(unless (and tar-path (os/stat tar-path :mode))
+  (fail (string "nie znaleziono zbudowanego archiwum instalacyjnego (carbon_toolchain-*.tar) w " install-dir
+                " -- upewnij się, że `bazel build //toolchain/install:carbon_toolchain_tar` zakończyło się sukcesem")))
 
 (def usr-dir (string stage "/usr"))
 (ensure-dir stage)
 (ensure-dir-p usr-dir)
 
-# `-L` żeby zamienić dowiązania symboliczne bazel-bin (które wskazują
-# do execroot/sandboxa) na prawdziwe pliki w stage dir -- inaczej
-# pakiet .zpk odziedziczyłby martwe symlinki po posprzątaniu przez
-# `bazel clean`.
-(run (string "cp -rL " prefix-root "/. " usr-dir "/"))
-(run (string "chmod +x " usr-dir "/bin/carbon"))
+# Archiwum ma na szczycie katalog `carbon_toolchain-<wersja>/`, a pod
+# nim `bin/` + `lib/carbon/core` w tym samym układzie co dawny
+# `prefix_root` (patrz `toolchain_pkg_filegroup` w
+# `install_filegroups.bzl`) -- `--strip-components=1` usuwa katalog
+# wersji, więc zawartość ląduje bezpośrednio jako `usr/bin`,
+# `usr/lib`. Symlinki wewnątrz archiwum (np. `bin/carbon` ->
+# `../lib/carbon/carbon-busybox`) są względne do rozpakowanego
+# drzewa, więc w przeciwieństwie do starego `cp -rL` z prefix_root
+# (który wskazywał do execroot/sandboxa Bazela) zostają poprawne
+# nawet po `bazel clean`.
+(run (string "tar -xf " tar-path " -C " usr-dir " --strip-components=1"))
+(run (string "chmod +x " usr-dir "/bin/carbon" " " usr-dir "/lib/carbon/carbon-busybox"))
 
-# `explorer` (interpreter demo) nie wchodzi w skład prefix_root --
+# `explorer` (interpreter demo) nie wchodzi w skład archiwum instalki --
 # instalujemy go osobno obok `carbon`, jeśli udało się go zbudować
 # (patrz uwaga o //explorer powyżej).
 (def explorer-src (string bazel-bin-dir "/explorer/explorer"))
